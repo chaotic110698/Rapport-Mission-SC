@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Générateur de Rapports de Mission — Star Citizen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Mono:wght@400;700&family=Inconsolata:wght@400;600&family=Courier+Prime:wght@400;700&family=Share+Tech+Mono&family=EB+Garamond:wght@400;600&family=Libre+Baskerville:wght@400;700&family=Open+Sans:wght@400;600&family=Roboto:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+:root{
+  --bg:#0A0D12;
+  --panel:#111721;
+  --panel-2:#0D1219;
+  --line:#1E2A3A;
+  --line-soft:#16202E;
+  --txt:#C6D2E1;
+  --txt-dim:#7A8AA0;
+  --accent:#63D2EE;
+  --accent-dim:rgba(99,210,238,.14);
+  --amber:#EFB35B;
+  --danger:#E96A6A;
+  --ok:#7ED9A2;
+  --radius:6px;
+  --ui-font:'Inter',system-ui,sans-serif;
+  --mono:'Space Mono','IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  background-image:radial-gradient(ellipse 80% 60% at 70% -10%, rgba(99,210,238,.06), transparent 60%);
+  color:var(--txt);
+  font-family:var(--ui-font);
+  font-size:14px;
+}
+
+/* ============ LAYOUT ============ */
+.app{display:grid;grid-template-columns:400px 1fr;height:100vh;overflow:hidden}
+@media(max-width:900px){.app{grid-template-columns:1fr;height:auto;overflow:visible}.preview-col{position:static!important;height:auto!important}}
+
+.form-col{overflow-y:auto;border-right:1px solid var(--line);background:var(--panel-2);scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.preview-col{overflow-y:auto;padding:28px;display:flex;flex-direction:column;align-items:center;gap:16px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+
+/* ============ HEADER APP ============ */
+.app-header{padding:20px 20px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel-2);z-index:10}
+.app-header h1{font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+.app-header p{color:var(--txt-dim);font-size:12px;margin-top:4px;letter-spacing:.04em}
+.blink{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:7px;animation:pulse 2.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+@media(prefers-reduced-motion:reduce){.blink{animation:none}}
+
+/* ============ PANELS / ACCORDIONS ============ */
+details.panel{border-bottom:1px solid var(--line-soft)}
+details.panel summary{
+  list-style:none;cursor:pointer;padding:13px 20px;display:flex;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--txt-dim);
+  user-select:none;transition:color .15s;
+}
+details.panel summary::-webkit-details-marker{display:none}
+details.panel summary:hover{color:var(--txt)}
+details.panel[open] summary{color:var(--accent)}
+details.panel summary::before{content:'▸';font-size:10px;transition:transform .15s}
+details.panel[open] summary::before{transform:rotate(90deg)}
+.panel-body{padding:4px 20px 18px}
+
+/* ============ FORM CONTROLS ============ */
+label.f{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-dim);margin:12px 0 5px}
+label.f:first-child{margin-top:4px}
+input[type=text],input[type=date],select,textarea{
+  width:100%;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  color:var(--txt);padding:8px 10px;font-family:var(--ui-font);font-size:13px;outline:none;transition:border-color .15s;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:64px;line-height:1.5}
+select{cursor:pointer}
+input[type=color]{width:100%;height:34px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);cursor:pointer;padding:3px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+/* toggles */
+.toggle{display:flex;align-items:center;justify-content:space-between;padding:7px 0;gap:10px}
+.toggle span{font-size:13px}
+.switch{position:relative;width:34px;height:18px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.slider-t{position:absolute;inset:0;background:var(--line);border-radius:99px;cursor:pointer;transition:.15s}
+.slider-t::before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;background:var(--txt-dim);border-radius:50%;transition:.15s}
+.switch input:checked + .slider-t{background:var(--accent-dim);border:1px solid var(--accent)}
+.switch input:checked + .slider-t::before{transform:translateX(15px);background:var(--accent)}
+
+/* segmented */
+.seg{display:flex;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.seg button{flex:1;background:transparent;border:none;color:var(--txt-dim);padding:7px 4px;font-size:12px;cursor:pointer;font-family:var(--ui-font);transition:.15s}
+.seg button.on{background:var(--accent-dim);color:var(--accent)}
+.seg button + button{border-left:1px solid var(--line)}
+
+/* buttons */
+.btn{background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:var(--radius);padding:8px 12px;font-size:12px;cursor:pointer;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;transition:.15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#06222C;font-weight:700}
+.btn.primary:hover{filter:brightness(1.1);color:#06222C}
+.btn.small{padding:5px 9px;font-size:10px}
+.btn.danger:hover{border-color:var(--danger);color:var(--danger)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+/* dynamic lists */
+.dyn-item{display:grid;gap:6px;padding:10px;background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--radius);margin-top:8px}
+.dyn-item .dyn-head{display:flex;gap:6px;align-items:center}
+.dyn-item input,.dyn-item select{background:var(--panel-2)}
+.del-x{background:none;border:none;color:var(--txt-dim);cursor:pointer;font-size:15px;padding:2px 6px;flex:none}
+.del-x:hover{color:var(--danger)}
+
+.hint{font-size:11px;color:var(--txt-dim);margin-top:5px;line-height:1.45}
+.divider{height:1px;background:var(--line-soft);margin:14px 0}
+
+/* logo drop */
+.logo-drop{border:1px dashed var(--line);border-radius:var(--radius);padding:16px;text-align:center;cursor:pointer;color:var(--txt-dim);font-size:12px;transition:.15s;margin-top:4px}
+.logo-drop:hover{border-color:var(--accent);color:var(--accent)}
+.logo-thumb{max-width:70px;max-height:70px;display:block;margin:0 auto 8px;border-radius:4px}
+
+/* ============ PREVIEW BAR ============ */
+.preview-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;position:sticky;top:0;z-index:5;background:rgba(10,13,18,.85);backdrop-filter:blur(6px);padding:10px 14px;border:1px solid var(--line);border-radius:8px}
+.preview-bar .rn{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:.1em}
+.paper-wrap{position:relative}
+#paperScaler{transform-origin:top center;position:relative}
+#pageMarks{position:absolute;inset:0;pointer-events:none;z-index:2}
+.page-mark{position:absolute;left:-2mm;right:-2mm;border-top:2px dashed rgba(99,210,238,.75)}
+.page-mark span{position:absolute;right:0;top:2px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--accent);background:rgba(10,13,18,.85);padding:1px 6px;border-radius:3px}
+
+/* ============ DOCUMENT (PAPER) ============ */
+#paper{
+  background:#fff;color:#111;position:relative;overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.05);
+}
+#paper *{box-sizing:border-box}
+.doc-inner{position:relative;width:100%;height:100%;padding:14mm 14mm;display:flex;flex-direction:column}
+#paper.auto-h .doc-inner{height:auto;min-height:140mm}
+
+/* borders */
+.doc-border-decorative .doc-inner{outline:2.2pt solid var(--p1);outline-offset:-7mm}
+.doc-border-decorative .doc-inner::before{content:'';position:absolute;inset:8.4mm;border:.6pt solid var(--p1);pointer-events:none}
+.doc-border-minimal .doc-inner{outline:.7pt solid var(--p1);outline-offset:-7mm}
+.corner{position:absolute;width:6mm;height:6mm;pointer-events:none}
+.corner.tl{top:5mm;left:5mm;border-top:1.6pt solid var(--p2);border-left:1.6pt solid var(--p2)}
+.corner.tr{top:5mm;right:5mm;border-top:1.6pt solid var(--p2);border-right:1.6pt solid var(--p2)}
+.corner.bl{bottom:5mm;left:5mm;border-bottom:1.6pt solid var(--p2);border-left:1.6pt solid var(--p2)}
+.corner.br{bottom:5mm;right:5mm;border-bottom:1.6pt solid var(--p2);border-right:1.6pt solid var(--p2)}
+
+/* header of doc */
+.doc-head{display:flex;align-items:flex-start;gap:6mm;margin-bottom:5mm}
+.doc-head.pos-top-center{flex-direction:column;align-items:center;text-align:center}
+.doc-head.pos-top-right{flex-direction:row-reverse;text-align:right}
+.doc-logo img{display:block}
+.doc-org{flex:1;min-width:0}
+.doc-guild{font-size:13pt;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--p1)}
+.doc-faction{font-size:8pt;letter-spacing:.22em;text-transform:uppercase;color:var(--p2);margin-top:1mm}
+.doc-ship{font-size:8pt;color:#555;margin-top:1mm;letter-spacing:.06em}
+.doc-flag{display:inline-flex;height:4mm;width:16mm;margin-top:2mm;border:.5pt solid #0003}
+.doc-flag i{flex:1}
+.class-strip{background:var(--p1);color:#fff;text-align:center;font-size:8pt;font-weight:700;letter-spacing:.35em;text-transform:uppercase;padding:1.6mm 0;margin-bottom:5mm}
+.doc-refline{display:flex;justify-content:space-between;font-size:8pt;letter-spacing:.1em;color:#444;border-top:1pt solid var(--p1);border-bottom:1pt solid var(--p1);padding:1.8mm 0;margin-bottom:6mm;gap:4mm;flex-wrap:wrap}
+.doc-refline b{color:var(--p1)}
+
+.doc-title{font-size:17pt;font-weight:700;letter-spacing:.05em;color:#111;margin-bottom:2mm}
+.theme-military .doc-title{text-transform:uppercase;letter-spacing:.1em}
+
+.sec{margin-bottom:5.5mm;break-inside:avoid;page-break-inside:avoid}
+.doc-table tr{break-inside:avoid;page-break-inside:avoid}
+.sec-label{font-size:8.5pt;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--p1);margin-bottom:1.6mm;display:flex;align-items:center;gap:2.5mm}
+.theme-military .sec-label::before{content:'■';font-size:6pt;color:var(--p2)}
+.theme-minimal .sec-label{border-bottom:.5pt solid #ddd;padding-bottom:1mm;font-weight:600;letter-spacing:.28em;color:#333}
+.theme-minimal .sec-label b{color:var(--p1)}
+.sec-body{font-size:10pt;line-height:1.55;color:#1a1a1a;white-space:pre-wrap}
+
+.kv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(38mm,1fr));gap:2mm 6mm;font-size:9.5pt}
+.kv-grid .k{font-size:7.5pt;letter-spacing:.14em;text-transform:uppercase;color:#777}
+.kv-grid .v{margin-top:.6mm;color:#111}
+
+table.doc-table{width:100%;border-collapse:collapse;font-size:9pt}
+.doc-table th{text-align:left;font-size:7.5pt;letter-spacing:.16em;text-transform:uppercase;color:#fff;background:var(--p1);padding:1.8mm 2.5mm}
+.theme-minimal .doc-table th{background:none;color:#333;border-bottom:1pt solid var(--p1)}
+.doc-table td{padding:1.8mm 2.5mm;border-bottom:.5pt solid #ddd;vertical-align:top}
+.theme-military .doc-table tr:nth-child(even) td{background:#00000006}
+.status-tag{display:inline-block;font-size:7.5pt;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.8mm 2mm;border:.8pt solid}
+.st-intact{color:#1E7A3C;border-color:#1E7A3C}
+.st-repaired{color:#8A6D1B;border-color:#8A6D1B}
+.st-toRepair{color:#B05A12;border-color:#B05A12}
+.st-outOfService{color:#A31F1F;border-color:#A31F1F;background:#A31F1F0F}
+
+.cl-grid{display:grid;gap:2mm}
+.cl-cell{border:.5pt solid #ddd;padding:1.8mm 2.5mm;break-inside:avoid;page-break-inside:avoid;display:flex;flex-direction:column;gap:1.2mm}
+.theme-military .cl-cell{background:#00000004}
+.cl-cell .cl-name{font-size:8.5pt;color:#111;font-weight:600}
+.cl-cell .status-tag{align-self:flex-start}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:6mm}
+
+.pilot-list{font-size:9.5pt;line-height:1.7;columns:2;column-gap:8mm}
+.pilot-list div{break-inside:avoid}
+.pilot-list div::before{content:'›';color:var(--p2);margin-right:2mm;font-weight:700}
+
+/* stamps */
+.stamp{
+  position:absolute;top:20mm;right:12mm;transform:rotate(7deg);
+  border:2.4pt solid var(--p2);color:var(--p2);padding:2mm 4mm;
+  font-size:11pt;font-weight:700;letter-spacing:.3em;text-transform:uppercase;
+  opacity:.82;pointer-events:none;
+}
+.stamp::before{content:'';position:absolute;inset:1.2mm;border:.7pt solid var(--p2)}
+.approval-stamp{
+  display:inline-block;transform:rotate(-6deg);border:2pt double var(--p2);color:var(--p2);
+  padding:1.6mm 4mm;font-size:9.5pt;font-weight:700;letter-spacing:.26em;text-transform:uppercase;opacity:.85;
+}
+.sig-block{display:flex;justify-content:space-between;align-items:flex-end;gap:8mm;margin-top:4mm}
+.sig-line{width:55mm;border-top:.8pt solid #111;padding-top:1.4mm;font-size:8pt;color:#555;letter-spacing:.1em;text-transform:uppercase}
+.sig-name{font-size:10.5pt;font-weight:700;color:#111}
+.sig-rank{font-size:8pt;color:#555;letter-spacing:.08em;text-transform:uppercase;margin-top:.5mm}
+
+.doc-footer{margin-top:auto;padding-top:3mm;border-top:.5pt solid #ccc;display:flex;justify-content:space-between;font-size:7pt;letter-spacing:.14em;text-transform:uppercase;color:#888}
+
+/* ============ PRINT ============ */
+@media print{
+  body{background:#fff}
+  .form-col,.preview-bar,.app-header{display:none!important}
+  .app{display:block;height:auto;overflow:visible}
+  .preview-col{padding:0;overflow:visible}
+  #paperScaler{transform:none!important}
+  #pageMarks{display:none!important}
+  #paper{box-shadow:none}
+}
+
+/* ============ MOBILE ============ */
+@media(max-width:900px){
+  /* 1. font-size >= 16px sur les champs pour empêcher le zoom auto de Safari iOS */
+  input[type=text],input[type=date],select,textarea{font-size:16px;padding:10px 12px}
+  /* 5. lisibilité : labels/hints un peu plus grands, paddings plus confortables */
+  label.f{font-size:12.5px}
+  .hint{font-size:12.5px;line-height:1.5}
+  .toggle span{font-size:14px}
+  .panel-body{padding:6px 16px 22px}
+  details.panel summary{padding:15px 16px;font-size:12px}
+  .app-header{padding:18px 16px 14px}
+  .preview-col{padding:16px 10px}
+}
+@media(max-width:480px){
+  /* 2. grilles en une seule colonne pour éviter les champs trop étroits */
+  .row,.row3{grid-template-columns:1fr}
+}
+@media(pointer:coarse){
+  /* 3. zones tactiles ~44px sans changer l'apparence (extension invisible de la zone cliquable) */
+  .switch::after{content:'';position:absolute;inset:-13px}
+  .btn.small{position:relative}
+  .btn.small::after{content:'';position:absolute;inset:-8px}
+  .del-x{position:relative}
+  .del-x::after{content:'';position:absolute;inset:-11px}
+  input[type=range]{height:30px}
+}
+
+/* modal templates */
+dialog{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:20px;max-width:420px;width:92%}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h3{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+.tpl-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line-soft);border-radius:var(--radius);margin-top:6px;font-size:13px}
+.tpl-item small{color:var(--txt-dim);display:block;font-size:11px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ==================== COLONNE FORMULAIRE ==================== -->
+<div class="form-col">
+  <div class="app-header">
+    <h1><span class="blink"></span>Rapport de mission</h1>
+    <p>Console de rédaction — Star Citizen</p>
+  </div>
+
+  <!-- STYLE GLOBAL -->
+  <details class="panel" open>
+    <summary>Style du document</summary>
+    <div class="panel-body">
+      <label class="f">Thème</label>
+      <div class="seg" data-seg="theme">
+        <button data-v="military" class="on">Militaire / Officiel</button>
+        <button data-v="minimal">Épuré</button>
+      </div>
+      <label class="f">Police d'écriture</label>
+      <select id="fontSel">
+        <optgroup label="Machine à écrire / Mono">
+          <option value="courier">Courier</option>
+          <option value="courier-new">Courier New</option>
+          <option value="ibm-plex-mono">IBM Plex Mono</option>
+          <option value="space-mono">Space Mono</option>
+          <option value="inconsolata">Inconsolata</option>
+          <option value="ocr-a">OCR-A (style)</option>
+        </optgroup>
+        <optgroup label="Serif">
+          <option value="georgia">Georgia</option>
+          <option value="times">Times New Roman</option>
+          <option value="garamond">Garamond</option>
+          <option value="libertine">Libertine / Baskerville</option>
+        </optgroup>
+        <optgroup label="Sans-Serif">
+          <option value="arial">Arial</option>
+          <option value="helvetica">Helvetica</option>
+          <option value="open-sans">Open Sans</option>
+          <option value="roboto">Roboto</option>
+          <option value="inter" selected>Inter</option>
+        </optgroup>
+      </select>
+      <div class="row">
+        <div>
+          <label class="f">Couleur primaire</label>
+          <input type="color" id="c1" value="#2C3E50">
+        </div>
+        <div>
+          <label class="f">Couleur secondaire</label>
+          <input type="color" id="c2" value="#B03A2E">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label class="f">Format papier</label>
+          <select id="paperSel">
+            <option value="a4" selected>A4</option>
+            <option value="letter">Lettre US</option>
+            <option value="a3">A3</option>
+          </select>
+        </div>
+        <div>
+          <label class="f">Orientation</label>
+          <select id="orientSel">
+            <option value="portrait" selected>Portrait</option>
+            <option value="landscape">Paysage</option>
+          </select>
+        </div>
+      </div>
+      <label class="f">Mise en page</label>
+      <div class="seg" data-seg="pagemode">
+        <button data-v="single" class="on">Page unique</button>
+        <button data-v="multi">Multi-pages</button>
+        <button data-v="auto">Page infinie</button>
+      </div>
+      <div class="hint" id="pageModeHint">Page unique : tout tient sur une page au format choisi.</div>
+    </div>
+  </details>
+
+  <!-- GUILDE & LOGO -->
+  <details class="panel" open>
+    <summary>Guilde &amp; logo</summary>
+    <div class="panel-body">
+      <label class="f">Nom de guilde</label>
+      <input type="text" id="guild" placeholder="Ex. Escadron Kraken">
+      <label class="f">Faction</label>
+      <input type="text" id="faction" placeholder="Ex. UEE / Indépendant">
+      <label class="f">Type de vaisseau</label>
+      <input type="text" id="shipType" placeholder="Ex. Aegis Hammerhead">
+      <label class="f">Logo</label>
+      <div class="logo-drop" id="logoDrop">
+        <img id="logoThumb" class="logo-thumb" style="display:none" alt="">
+        <span id="logoDropTxt">Cliquer pour charger un logo (PNG/JPG/SVG)</span>
+      </div>
+      <input type="file" id="logoFile" accept="image/*" style="display:none">
+      <div class="row" style="margin-top:8px">
+        <div>
+          <label class="f">Position</label>
+          <select id="logoPos">
+            <option value="top-left" selected>Haut gauche</option>
+            <option value="top-center">Haut centre</option>
+            <option value="top-right">Haut droite</option>
+          </select>
+        </div>
+        <div>
+          <label class="f">Taille — <span id="logoSizeVal">22</span> mm</label>
+          <input type="range" id="logoSize" min="8" max="50" value="22">
+        </div>
+      </div>
+      <div class="btn-row"><button class="btn small danger" id="logoClear">Retirer le logo</button></div>
+      <div class="toggle"><span>Drapeau de faction (bandes de couleurs)</span>
+        <label class="switch"><input type="checkbox" id="flagOn"><span class="slider-t"></span></label>
+      </div>
+      <div class="row">
+        <div>
+          <label class="f">Couleur drapeau 1</label>
+          <input type="color" id="flagC1" value="#1B3A5C">
+        </div>
+        <div>
+          <label class="f">Couleur drapeau 2</label>
+          <input type="color" id="flagC2" value="#C9A227">
+        </div>
+      </div>
+      <div class="hint">Les couleurs du drapeau sont indépendantes de celles du document.</div>
+    </div>
+  </details>
+
+  <!-- NUMERO DE RAPPORT -->
+  <details class="panel" open>
+    <summary>Numéro de rapport</summary>
+    <div class="panel-body">
+      <div class="row">
+        <div>
+          <label class="f">Préfixe</label>
+          <input type="text" id="rnPrefix" value="REP-">
+        </div>
+        <div>
+          <label class="f">Format (A = lettre, 1 = chiffre)</label>
+          <input type="text" id="rnFormat" value="AAAA-1111-AA1111">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary small" id="rnGen">⟳ Générer un numéro</button>
+      </div>
+      <div class="hint">Numéro actuel : <b id="rnCurrent" style="color:var(--amber);font-family:var(--mono)">—</b></div>
+    </div>
+  </details>
+
+  <!-- CONTENU -->
+  <details class="panel" open>
+    <summary>Contenu du rapport</summary>
+    <div class="panel-body">
+      <div class="toggle"><span>Titre de mission</span><label class="switch"><input type="checkbox" data-sec="title" checked><span class="slider-t"></span></label></div>
+      <input type="text" id="mTitle" placeholder="Ex. Opération Verrou d'Orion">
+
+      <div class="divider"></div>
+      <div class="toggle"><span>Dates &amp; lieu</span><label class="switch"><input type="checkbox" data-sec="dates" checked><span class="slider-t"></span></label></div>
+      <div class="row3">
+        <div><label class="f">Début</label><input type="date" id="dStart"></div>
+        <div><label class="f">Fin</label><input type="date" id="dEnd"></div>
+        <div><label class="f">Système / lieu</label><input type="text" id="mPlace" placeholder="Stanton › Crusader"></div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="toggle"><span>Pilotes impliqués</span><label class="switch"><input type="checkbox" data-sec="pilots" checked><span class="slider-t"></span></label></div>
+      <textarea id="mPilots" placeholder="Un pilote par ligne&#10;Ex. Cdt R. Vasquez — Hammerhead&#10;Lt K. Moreau — Gladius"></textarea>
+
+      <div class="divider"></div>
+      <div class="toggle"><span>Résumé de mission</span><label class="switch"><input type="checkbox" data-sec="summary" checked><span class="slider-t"></span></label></div>
+      <textarea id="mSummary" placeholder="Déroulé général de la mission…"></textarea>
+
+      <div class="divider"></div>
+      <div class="toggle"><span>Détails tactiques</span><label class="switch"><input type="checkbox" data-sec="tactical" checked><span class="slider-t"></span></label></div>
+      <textarea id="mTactical" placeholder="Formation, engagement, manœuvres…"></textarea>
+
+      <div class="divider"></div>
+      <div class="toggle"><span>Pertes / Gains</span><label class="switch"><input type="checkbox" data-sec="lossesGains" checked><span class="slider-t"></span></label></div>
+      <div class="row">
+        <div><label class="f">Pertes</label><textarea id="mLosses" placeholder="Une entrée par ligne"></textarea></div>
+        <div><label class="f">Gains</label><textarea id="mGains" placeholder="Une entrée par ligne"></textarea></div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="toggle"><span>Signature</span><label class="switch"><input type="checkbox" data-sec="signature" checked><span class="slider-t"></span></label></div>
+      <div class="row">
+        <div><label class="f">Nom</label><input type="text" id="sigName" placeholder="Cdt R. Vasquez"></div>
+        <div><label class="f">Grade / fonction</label><input type="text" id="sigRank" placeholder="Commandant d'escadre"></div>
+      </div>
+      <label class="f">Signature manuscrite (image)</label>
+      <div class="logo-drop" id="sigDrop">
+        <img id="sigThumb" class="logo-thumb" style="display:none" alt="">
+        <span id="sigDropTxt">Cliquer pour charger une signature (PNG fond transparent conseillé)</span>
+      </div>
+      <input type="file" id="sigFile" accept="image/*" style="display:none">
+      <div class="row" style="margin-top:8px">
+        <div><label class="f">Largeur — <span id="sigSizeVal">35</span> mm</label><input type="range" id="sigSize" min="15" max="70" value="35"></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn small danger" id="sigClear" style="width:100%">Retirer</button></div>
+      </div>
+    </div>
+  </details>
+
+  <!-- CHECKLIST COMPOSANTS -->
+  <details class="panel">
+    <summary>État des composants</summary>
+    <div class="panel-body">
+      <div class="toggle"><span>Afficher la checklist</span><label class="switch"><input type="checkbox" id="clOn" checked><span class="slider-t"></span></label></div>
+      <label class="f">États disponibles (nom + couleur)</label>
+      <div id="stateList"></div>
+      <div class="btn-row"><button class="btn small" id="stAdd">+ Ajouter un état</button></div>
+      <div class="hint">Ces états sont sauvegardés dans le template JSON. Supprimer un état utilisé réassigne les composants au premier état de la liste.</div>
+      <div class="divider"></div>
+      <label class="f">Composants — disposition : <span id="clColsVal">1</span> colonne(s)</label>
+      <input type="range" id="clCols" min="1" max="4" value="1">
+      <div class="hint">1 colonne = tableau classique. 2 à 4 colonnes = grille compacte.</div>
+      <div id="clList"></div>
+      <div class="btn-row"><button class="btn small" id="clAdd">+ Ajouter un composant</button></div>
+    </div>
+  </details>
+
+  <!-- HISTORIQUE -->
+  <details class="panel">
+    <summary>Historique des missions</summary>
+    <div class="panel-body">
+      <div class="toggle"><span>Afficher l'historique</span><label class="switch"><input type="checkbox" data-sec="missionHistory"><span class="slider-t"></span></label></div>
+      <div id="mhList"></div>
+      <div class="btn-row"><button class="btn small" id="mhAdd">+ Ajouter une mission</button></div>
+    </div>
+  </details>
+
+  <!-- SCEAUX -->
+  <details class="panel">
+    <summary>Sceaux &amp; éléments graphiques</summary>
+    <div class="panel-body">
+      <div class="toggle"><span>Tampon d'en-tête</span><label class="switch"><input type="checkbox" id="stampOn" checked><span class="slider-t"></span></label></div>
+      <input type="text" id="stampText" value="MISSION REPORT">
+      <label class="f">Bordure du document</label>
+      <div class="seg" data-seg="border">
+        <button data-v="decorative" class="on">Décorative</button>
+        <button data-v="minimal">Minimale</button>
+        <button data-v="none">Aucune</button>
+      </div>
+      <div class="toggle"><span>Tampon d'approbation</span><label class="switch"><input type="checkbox" id="apprOn"><span class="slider-t"></span></label></div>
+      <input type="text" id="apprText" value="APPROUVÉ">
+      <div class="toggle"><span>Bandeau de classification (thème militaire)</span><label class="switch"><input type="checkbox" id="classOn" checked><span class="slider-t"></span></label></div>
+      <input type="text" id="classText" value="DIFFUSION RESTREINTE — ESCADRON">
+    </div>
+  </details>
+
+  <!-- TEMPLATES -->
+  <details class="panel">
+    <summary>Templates (JSON)</summary>
+    <div class="panel-body">
+      <label class="f">Nom du template</label>
+      <input type="text" id="tplName" placeholder="Ex. Raid Vanduul Janvier">
+      <div class="btn-row">
+        <button class="btn small" id="tplExport">⬇ Exporter JSON</button>
+        <button class="btn small" id="tplImport">⬆ Importer JSON</button>
+        <input type="file" id="tplFile" accept=".json,application/json" style="display:none">
+      </div>
+      <div class="divider"></div>
+      <div class="btn-row">
+        <button class="btn small" id="tplSaveLocal">💾 Sauver dans le navigateur</button>
+        <button class="btn small" id="tplOpenLocal">📂 Mes templates</button>
+      </div>
+      <div class="hint">Le JSON contient les métadonnées (nom, guilde, faction, vaisseau, date de création) et tous les paramètres du rapport.</div>
+    </div>
+  </details>
+
+  <div style="padding:18px 20px 40px">
+    <div class="btn-row">
+      <button class="btn primary" id="pdfBtn" style="flex:1">⬇ Exporter le PDF</button>
+      <button class="btn" id="printBtn" title="Utilise l'impression du navigateur (qualité vectorielle maximale)">🖨 Imprimer / PDF natif</button>
+    </div>
+    <div class="hint" style="margin-top:8px">Astuce : « Imprimer / PDF natif » donne un texte vectoriel parfaitement net — choisissez « Enregistrer au format PDF » dans la boîte d'impression.</div>
+  </div>
+</div>
+
+<!-- ==================== COLONNE PRÉVISUALISATION ==================== -->
+<div class="preview-col">
+  <div class="preview-bar">
+    <span style="font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--txt-dim)">PRÉVISUALISATION</span>
+    <span class="rn" id="rnBar">—</span>
+    <span style="font-size:11px;color:var(--txt-dim)" id="fmtBar">A4 · Portrait</span>
+  </div>
+  <div class="paper-wrap">
+    <div id="paperScaler">
+      <div id="paper"></div>
+      <div id="pageMarks"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- MODAL TEMPLATES LOCAUX -->
+<dialog id="tplDialog">
+  <h3>Templates enregistrés</h3>
+  <div id="tplLocalList"></div>
+  <div class="btn-row" style="margin-top:14px"><button class="btn small" onclick="document.getElementById('tplDialog').close()">Fermer</button></div>
+</dialog>
+
+<script>
+/* =================================================================
+   ÉTAT
+================================================================= */
+const PAPERS = { a4:[210,297], letter:[215.9,279.4], a3:[297,420] };
+const FONTS = {
+  'courier':"'Courier Prime',Courier,monospace",
+  'courier-new':"'Courier New',Courier,monospace",
+  'ibm-plex-mono':"'IBM Plex Mono',monospace",
+  'space-mono':"'Space Mono',monospace",
+  'inconsolata':"'Inconsolata',monospace",
+  'ocr-a':"'Share Tech Mono','OCR A Extended',monospace",
+  'georgia':"Georgia,serif",
+  'times':"'Times New Roman',Times,serif",
+  'garamond':"'EB Garamond',Garamond,serif",
+  'libertine':"'Libre Baskerville','Linux Libertine',serif",
+  'arial':"Arial,sans-serif",
+  'helvetica':"Helvetica,Arial,sans-serif",
+  'open-sans':"'Open Sans',sans-serif",
+  'roboto':"'Roboto',sans-serif",
+  'inter':"'Inter',sans-serif"
+};
+const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.userAgent)); /* iPad en mode desktop */
+
+const DEFAULT_STATES = [
+  { id:'intact', label:'Intact', color:'#1E7A3C' },
+  { id:'repaired', label:'Réparé en mission', color:'#8A6D1B' },
+  { id:'toRepair', label:'À réparer', color:'#B05A12' },
+  { id:'outOfService', label:'Hors service', color:'#A31F1F' }
+];
+
+const state = {
+  metadata:{ name:'', guild:'', faction:'', shipType:'' },
+  styling:{ theme:'military', font:'inter', primaryColor:'#2C3E50', secondaryColor:'#B03A2E', paperFormat:'a4', orientation:'portrait', pageMode:'single' },
+  logo:{ imageBase64:'', position:'top-left', width:22 },
+  signatureImage:{ imageBase64:'', width:35 },
+  reportNumber:{ format:'AAAA-1111-AA1111', prefix:'REP-', value:'' },
+  sections:{ title:true, dates:true, pilots:true, summary:true, tacticalDetails:true, lossesGains:true, signature:true, missionHistory:false },
+  content:{ title:'', dateStart:'', dateEnd:'', place:'', pilots:'', summary:'', tactical:'', losses:'', gains:'', sigName:'', sigRank:'' },
+  componentChecklist:{ enabled:true, columns:1, states:DEFAULT_STATES.map(s=>({...s})), components:[
+    {name:'Moteur principal',status:'intact'},
+    {name:'Blindage',status:'intact'},
+    {name:'Boucliers',status:'intact'},
+    {name:'Armement',status:'intact'}
+  ]},
+  missionHistory:[],
+  seals:{ enabled:true, stampText:'MISSION REPORT', borderStyle:'decorative', approvalStamp:false, approvalText:'APPROUVÉ', classification:true, classificationText:'DIFFUSION RESTREINTE — ESCADRON', flag:false, flagColor1:'#1B3A5C', flagColor2:'#C9A227' }
+};
+
+/* =================================================================
+   UTILITAIRES
+================================================================= */
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nl2div = (s,cls='') => String(s||'').split('\n').filter(l=>l.trim()).map(l=>`<div class="${cls}">${esc(l)}</div>`).join('');
+
+function getStatus(id){
+  return state.componentChecklist.states.find(s=>s.id===id) || state.componentChecklist.states[0] || {label:'—',color:'#666'};
+}
+
+function genReportNumber(){
+  const L='ABCDEFGHIJKLMNOPQRSTUVWXYZ', D='0123456789';
+  const body = (state.reportNumber.format||'').split('').map(ch=>{
+    if(ch==='A') return L[Math.floor(Math.random()*26)];
+    if(ch==='1') return D[Math.floor(Math.random()*10)];
+    return ch;
+  }).join('');
+  state.reportNumber.value = (state.reportNumber.prefix||'') + body;
+}
+
+function fmtDate(d){
+  if(!d) return '';
+  const [y,m,dd]=d.split('-');
+  return `${dd}.${m}.${y}`;
+}
+
+/* =================================================================
+   RENDU DU DOCUMENT
+================================================================= */
+function render(){
+  const s = state;
+  const [w,h] = PAPERS[s.styling.paperFormat];
+  const landscape = s.styling.orientation==='landscape';
+  const W = landscape? h : w, H = landscape? w : h;
+
+  const paper = $('paper');
+  const mode = s.styling.pageMode;
+  const flowHeight = mode!=='single';
+  paper.style.width = W+'mm';
+  paper.style.height = flowHeight ? 'auto' : H+'mm';
+  paper.style.setProperty('--p1', s.styling.primaryColor);
+  paper.style.setProperty('--p2', s.styling.secondaryColor);
+  paper.style.fontFamily = FONTS[s.styling.font];
+  paper.className = `theme-${s.styling.theme} doc-border-${s.seals.borderStyle}` + (flowHeight?' auto-h':'');
+
+  const c = s.content, sec = s.sections;
+  let html = '<div class="doc-inner">';
+
+  // coins décoratifs
+  if(s.seals.borderStyle==='decorative'){
+    html += '<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>';
+  }
+
+  // tampon en-tête
+  if(s.seals.enabled && s.seals.stampText){
+    html += `<div class="stamp">${esc(s.seals.stampText)}</div>`;
+  }
+
+  // bandeau classification (militaire)
+  if(s.styling.theme==='military' && s.seals.classification && s.seals.classificationText){
+    html += `<div class="class-strip">${esc(s.seals.classificationText)}</div>`;
+  }
+
+  // en-tête organisation
+  const logoImg = s.logo.imageBase64 ? `<div class="doc-logo"><img src="${s.logo.imageBase64}" style="width:${s.logo.width}mm;height:auto"></div>` : '';
+  const flag = s.seals.flag ? `<span class="doc-flag"><i style="background:${s.seals.flagColor1}"></i><i style="background:${s.seals.flagColor2}"></i><i style="background:${s.seals.flagColor1}"></i></span>` : '';
+  html += `<div class="doc-head pos-${s.logo.position}">
+    ${logoImg}
+    <div class="doc-org">
+      ${s.metadata.guild? `<div class="doc-guild">${esc(s.metadata.guild)}</div>`:''}
+      ${s.metadata.faction? `<div class="doc-faction">${esc(s.metadata.faction)}</div>`:''}
+      ${s.metadata.shipType? `<div class="doc-ship">Bâtiment : ${esc(s.metadata.shipType)}</div>`:''}
+      ${flag}
+    </div>
+  </div>`;
+
+  // ligne de référence
+  html += `<div class="doc-refline">
+    <span>N° <b>${esc(s.reportNumber.value||'—')}</b></span>
+    ${sec.dates && (c.dateStart||c.dateEnd)? `<span>Période : <b>${fmtDate(c.dateStart)}${c.dateEnd? ' → '+fmtDate(c.dateEnd):''}</b></span>`:''}
+    ${sec.dates && c.place? `<span>Zone : <b>${esc(c.place)}</b></span>`:''}
+  </div>`;
+
+  // titre
+  if(sec.title && c.title) html += `<div class="doc-title">${esc(c.title)}</div>`;
+
+  // pilotes
+  if(sec.pilots && c.pilots.trim()){
+    html += `<div class="sec"><div class="sec-label">Pilotes impliqués</div><div class="pilot-list">${nl2div(c.pilots)}</div></div>`;
+  }
+
+  // résumé
+  if(sec.summary && c.summary.trim()){
+    html += `<div class="sec"><div class="sec-label">Résumé de mission</div><div class="sec-body">${esc(c.summary)}</div></div>`;
+  }
+
+  // détails tactiques
+  if(sec.tacticalDetails && c.tactical.trim()){
+    html += `<div class="sec"><div class="sec-label">Détails tactiques</div><div class="sec-body">${esc(c.tactical)}</div></div>`;
+  }
+
+  // pertes / gains
+  if(sec.lossesGains && (c.losses.trim()||c.gains.trim())){
+    html += `<div class="sec"><div class="sec-label">Pertes / Gains</div><div class="two-col">
+      <div><div class="kv-grid"><div><div class="k">Pertes</div></div></div><div class="sec-body" style="font-size:9.5pt">${esc(c.losses)||'—'}</div></div>
+      <div><div class="kv-grid"><div><div class="k">Gains</div></div></div><div class="sec-body" style="font-size:9.5pt">${esc(c.gains)||'—'}</div></div>
+    </div></div>`;
+  }
+
+  // checklist composants
+  if(s.componentChecklist.enabled && s.componentChecklist.components.length){
+    const cols = Math.min(4, Math.max(1, s.componentChecklist.columns||1));
+    let body;
+    if(cols===1){
+      body = `<table class="doc-table"><tr><th style="width:60%">Composant</th><th>État</th></tr>
+      ${s.componentChecklist.components.map(cp=>{const st=getStatus(cp.status);return `<tr><td>${esc(cp.name)||'—'}</td><td><span class="status-tag" style="color:${st.color};border-color:${st.color}">${esc(st.label)}</span></td></tr>`;}).join('')}
+      </table>`;
+    } else {
+      body = `<div class="cl-grid" style="grid-template-columns:repeat(${cols},1fr)">
+      ${s.componentChecklist.components.map(cp=>{const st=getStatus(cp.status);return `<div class="cl-cell"><div class="cl-name">${esc(cp.name)||'—'}</div><span class="status-tag" style="color:${st.color};border-color:${st.color}">${esc(st.label)}</span></div>`;}).join('')}
+      </div>`;
+    }
+    html += `<div class="sec"><div class="sec-label">État des composants</div>${body}</div>`;
+  }
+
+  // historique missions
+  if(sec.missionHistory && s.missionHistory.length){
+    html += `<div class="sec"><div class="sec-label">Historique des missions</div>
+    <table class="doc-table"><tr><th style="width:22%">Date</th><th>Mission</th><th style="width:28%">Résultat</th></tr>
+    ${s.missionHistory.map(m=>`<tr><td>${esc(fmtDate(m.date))||'—'}</td><td>${esc(m.name)||'—'}</td><td>${esc(m.result)||'—'}</td></tr>`).join('')}
+    </table></div>`;
+  }
+
+  // signature + tampon approbation
+  if(sec.signature){
+    html += `<div class="sec"><div class="sec-label">Validation</div><div class="sig-block">
+      <div>
+        ${c.sigName? `<div class="sig-name">${esc(c.sigName)}</div>`:''}
+        ${c.sigRank? `<div class="sig-rank">${esc(c.sigRank)}</div>`:''}
+        ${s.signatureImage.imageBase64? `<img src="${s.signatureImage.imageBase64}" style="width:${s.signatureImage.width}mm;height:auto;display:block;margin-top:3mm">`:''}
+        <div class="sig-line" style="margin-top:${s.signatureImage.imageBase64?'1.5mm':'8mm'}">Signature</div>
+      </div>
+      ${s.seals.approvalStamp? `<div class="approval-stamp">${esc(s.seals.approvalText||'APPROUVÉ')}</div>`:''}
+    </div></div>`;
+  }
+
+  // pied de page
+  html += `<div class="doc-footer">
+    <span>${esc(s.metadata.guild||'')}</span>
+    <span>${esc(s.reportNumber.value||'')}</span>
+    <span id="pgLabel">Page 1/1</span>
+  </div>`;
+
+  html += '</div>';
+  paper.innerHTML = html;
+
+  // barre d'info
+  $('rnBar').textContent = s.reportNumber.value||'—';
+  $('rnCurrent').textContent = s.reportNumber.value||'—';
+  const modeLabels = {single:'Page unique', multi:'Multi-pages', auto:'Page infinie'};
+  $('fmtBar').textContent = `${s.styling.paperFormat.toUpperCase()} · ${landscape?'Paysage':'Portrait'} · ${modeLabels[mode]}`;
+
+  // repères de pages (mode multi)
+  const marks = $('pageMarks');
+  marks.innerHTML = '';
+  if(mode==='multi'){
+    const mmToPx = 96/25.4;
+    const pageHpx = H*mmToPx;
+    const totalPx = paper.offsetHeight;
+    const nPages = Math.max(1, Math.ceil(totalPx/pageHpx));
+    for(let k=1;k<nPages;k++){
+      marks.innerHTML += `<div class="page-mark" style="top:${k*pageHpx}px"><span>Page ${k+1}</span></div>`;
+    }
+    const pg = document.querySelector('#paper #pgLabel');
+    if(pg) pg.textContent = nPages>1? nPages+' pages' : 'Page 1/1';
+  }
+
+  fitPreview();
+}
+
+function fitPreview(){
+  const scaler = $('paperScaler'), paper = $('paper');
+  const avail = document.querySelector('.preview-col').clientWidth - 56;
+  const pw = paper.offsetWidth;
+  const scale = Math.min(1, avail/pw);
+  scaler.style.transform = `scale(${scale})`;
+  scaler.parentElement.style.height = (paper.offsetHeight*scale)+'px';
+  scaler.parentElement.style.width = (pw*scale)+'px';
+}
+window.addEventListener('resize', fitPreview);
+window.addEventListener('orientationchange', ()=>setTimeout(fitPreview,300));
+
+/* =================================================================
+   LISTES DYNAMIQUES (composants + historique)
+================================================================= */
+function renderStatesForm(){
+  $('stateList').innerHTML = state.componentChecklist.states.map((st,i)=>`
+    <div class="dyn-item">
+      <div class="dyn-head">
+        <input type="text" value="${esc(st.label)}" placeholder="Nom de l'état" oninput="state.componentChecklist.states[${i}].label=this.value;render()">
+        <input type="color" value="${esc(st.color)}" style="width:44px;flex:none" oninput="state.componentChecklist.states[${i}].color=this.value;render()">
+        <button class="del-x" onclick="deleteStatus(${i})" title="Supprimer">✕</button>
+      </div>
+    </div>`).join('');
+}
+window.deleteStatus = i=>{
+  const cl = state.componentChecklist;
+  if(cl.states.length<=1){ alert('Il faut conserver au moins un état.'); return; }
+  const removed = cl.states.splice(i,1)[0];
+  const fallback = cl.states[0].id;
+  cl.components.forEach(c=>{ if(c.status===removed.id) c.status=fallback; });
+  renderStatesForm(); renderComponentForm(); render();
+};
+$('stAdd').onclick = ()=>{
+  state.componentChecklist.states.push({ id:'st'+Date.now().toString(36)+Math.floor(Math.random()*1e4), label:'Nouvel état', color:'#555555' });
+  renderStatesForm(); renderComponentForm(); render();
+};
+
+function renderComponentForm(){
+  const states = state.componentChecklist.states;
+  $('clList').innerHTML = state.componentChecklist.components.map((cp,i)=>`
+    <div class="dyn-item">
+      <div class="dyn-head">
+        <input type="text" value="${esc(cp.name)}" placeholder="Nom du composant" oninput="state.componentChecklist.components[${i}].name=this.value;render()">
+        <button class="del-x" onclick="state.componentChecklist.components.splice(${i},1);renderComponentForm();render()" title="Supprimer">✕</button>
+      </div>
+      <select onchange="state.componentChecklist.components[${i}].status=this.value;render()">
+        ${states.map(st=>`<option value="${esc(st.id)}" ${cp.status===st.id?'selected':''}>${esc(st.label)}</option>`).join('')}
+      </select>
+    </div>`).join('');
+}
+function renderHistoryForm(){
+  $('mhList').innerHTML = state.missionHistory.map((m,i)=>`
+    <div class="dyn-item">
+      <div class="dyn-head">
+        <input type="date" value="${esc(m.date)}" oninput="state.missionHistory[${i}].date=this.value;render()" style="max-width:140px">
+        <input type="text" value="${esc(m.name)}" placeholder="Nom de mission" oninput="state.missionHistory[${i}].name=this.value;render()">
+        <button class="del-x" onclick="state.missionHistory.splice(${i},1);renderHistoryForm();render()" title="Supprimer">✕</button>
+      </div>
+      <input type="text" value="${esc(m.result)}" placeholder="Résultat (succès, pertes, etc.)" oninput="state.missionHistory[${i}].result=this.value;render()">
+    </div>`).join('');
+}
+$('clCols').oninput = e=>{ state.componentChecklist.columns=+e.target.value; $('clColsVal').textContent=e.target.value; render(); };
+$('clAdd').onclick = ()=>{ state.componentChecklist.components.push({name:'',status:state.componentChecklist.states[0].id}); renderComponentForm(); render(); };
+$('mhAdd').onclick = ()=>{ state.missionHistory.push({date:'',name:'',result:''}); renderHistoryForm(); render(); };
+
+/* =================================================================
+   LIAISONS FORMULAIRE
+================================================================= */
+function bind(id, path, evt='input'){
+  const el = $(id);
+  el.addEventListener(evt, ()=>{
+    const keys = path.split('.');
+    let o = state;
+    while(keys.length>1) o = o[keys.shift()];
+    o[keys[0]] = el.type==='checkbox'? el.checked : el.value;
+    render();
+  });
+}
+bind('guild','metadata.guild'); bind('faction','metadata.faction'); bind('shipType','metadata.shipType');
+bind('mTitle','content.title'); bind('dStart','content.dateStart'); bind('dEnd','content.dateEnd'); bind('mPlace','content.place');
+bind('mPilots','content.pilots'); bind('mSummary','content.summary'); bind('mTactical','content.tactical');
+bind('mLosses','content.losses'); bind('mGains','content.gains');
+bind('sigName','content.sigName'); bind('sigRank','content.sigRank');
+bind('fontSel','styling.font','change'); bind('paperSel','styling.paperFormat','change'); bind('orientSel','styling.orientation','change');
+bind('c1','styling.primaryColor'); bind('c2','styling.secondaryColor');
+bind('rnPrefix','reportNumber.prefix'); bind('rnFormat','reportNumber.format');
+bind('stampOn','seals.enabled','change'); bind('stampText','seals.stampText');
+bind('apprOn','seals.approvalStamp','change'); bind('apprText','seals.approvalText');
+bind('classOn','seals.classification','change'); bind('classText','seals.classificationText');
+bind('flagOn','seals.flag','change');
+bind('flagC1','seals.flagColor1'); bind('flagC2','seals.flagColor2');
+bind('clOn','componentChecklist.enabled','change');
+
+// toggles de sections
+document.querySelectorAll('[data-sec]').forEach(el=>{
+  el.addEventListener('change', ()=>{
+    const key = el.dataset.sec==='tactical' ? 'tacticalDetails' : el.dataset.sec;
+    state.sections[key] = el.checked;
+    render();
+  });
+});
+
+// segments
+document.querySelectorAll('.seg').forEach(seg=>{
+  seg.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      if(seg.dataset.seg==='theme') state.styling.theme = b.dataset.v;
+      if(seg.dataset.seg==='border') state.seals.borderStyle = b.dataset.v;
+      if(seg.dataset.seg==='pagemode'){
+        state.styling.pageMode = b.dataset.v;
+        const hints = {
+          single:'Page unique : tout tient sur une page au format choisi.',
+          multi:'Multi-pages : le contenu se répartit sur plusieurs pages au format choisi. Les repères en pointillés dans l\u2019aperçu montrent les coupures approximatives.',
+          auto:'Page infinie : la largeur suit le format, la hauteur s\u2019étend selon le texte (PDF en une seule page à la taille du contenu).'
+        };
+        $('pageModeHint').textContent = hints[b.dataset.v];
+      }
+      render();
+    });
+  });
+});
+
+// logo
+$('logoDrop').onclick = ()=> $('logoFile').click();
+$('logoFile').onchange = e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    state.logo.imageBase64 = r.result;
+    $('logoThumb').src = r.result; $('logoThumb').style.display='block';
+    $('logoDropTxt').textContent = 'Changer le logo';
+    render();
+  };
+  r.readAsDataURL(f);
+};
+$('logoClear').onclick = ()=>{
+  state.logo.imageBase64=''; $('logoThumb').style.display='none';
+  $('logoDropTxt').textContent='Cliquer pour charger un logo (PNG/JPG/SVG)'; $('logoFile').value='';
+  render();
+};
+$('logoPos').onchange = e=>{ state.logo.position=e.target.value; render(); };
+$('logoSize').oninput = e=>{ state.logo.width=+e.target.value; $('logoSizeVal').textContent=e.target.value; render(); };
+
+// image de signature
+$('sigDrop').onclick = ()=> $('sigFile').click();
+$('sigFile').onchange = e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    state.signatureImage.imageBase64 = r.result;
+    $('sigThumb').src = r.result; $('sigThumb').style.display='block';
+    $('sigDropTxt').textContent = 'Changer la signature';
+    render();
+  };
+  r.readAsDataURL(f);
+};
+$('sigClear').onclick = ()=>{
+  state.signatureImage.imageBase64=''; $('sigThumb').style.display='none';
+  $('sigDropTxt').textContent='Cliquer pour charger une signature (PNG fond transparent conseillé)'; $('sigFile').value='';
+  render();
+};
+$('sigSize').oninput = e=>{ state.signatureImage.width=+e.target.value; $('sigSizeVal').textContent=e.target.value; render(); };
+
+// numéro de rapport
+$('rnGen').onclick = ()=>{ genReportNumber(); render(); };
+
+/* =================================================================
+   TEMPLATES JSON
+================================================================= */
+function buildTemplate(){
+  return {
+    metadata:{
+      name: $('tplName').value || 'Template sans nom',
+      guild: state.metadata.guild,
+      faction: state.metadata.faction,
+      shipType: state.metadata.shipType,
+      createdAt: new Date().toISOString().slice(0,10)
+    },
+    styling:{...state.styling},
+    logo:{...state.logo},
+    signatureImage:{...state.signatureImage},
+    reportNumber:{ format:state.reportNumber.format, prefix:state.reportNumber.prefix },
+    sections:{...state.sections},
+    content:{...state.content},
+    componentChecklist:{ enabled:state.componentChecklist.enabled, columns:state.componentChecklist.columns, states:state.componentChecklist.states.map(s=>({...s})), components:state.componentChecklist.components.map(c=>({...c})) },
+    missionHistory:state.missionHistory.map(m=>({...m})),
+    seals:{...state.seals}
+  };
+}
+function applyTemplate(t){
+  try{
+    if(t.metadata){ state.metadata.guild=t.metadata.guild||''; state.metadata.faction=t.metadata.faction||''; state.metadata.shipType=t.metadata.shipType||''; $('tplName').value=t.metadata.name||''; }
+    if(t.styling){ Object.assign(state.styling,t.styling); if(!state.styling.pageMode) state.styling.pageMode = t.styling.autoHeight? 'auto':'single'; delete state.styling.autoHeight; }
+    if(t.logo) Object.assign(state.logo,t.logo);
+    if(t.signatureImage) Object.assign(state.signatureImage,t.signatureImage);
+    if(t.reportNumber){ state.reportNumber.format=t.reportNumber.format||state.reportNumber.format; state.reportNumber.prefix=t.reportNumber.prefix??state.reportNumber.prefix; }
+    if(t.sections) Object.assign(state.sections,t.sections);
+    if(t.content) Object.assign(state.content,t.content);
+    if(t.componentChecklist){
+      const cl = state.componentChecklist;
+      cl.enabled = !!t.componentChecklist.enabled;
+      cl.columns = Math.min(4, Math.max(1, +t.componentChecklist.columns || 1));
+      cl.states = (Array.isArray(t.componentChecklist.states) && t.componentChecklist.states.length)
+        ? t.componentChecklist.states.map(s=>({ id:s.id||('st'+Math.random().toString(36).slice(2)), label:s.label||'État', color:s.color||'#555555' }))
+        : DEFAULT_STATES.map(s=>({...s}));
+      const ids = new Set(cl.states.map(s=>s.id));
+      cl.components = (t.componentChecklist.components||[]).map(c=>({ name:c.name||'', status: ids.has(c.status)? c.status : cl.states[0].id }));
+    }
+    if(Array.isArray(t.missionHistory)) state.missionHistory=t.missionHistory.map(m=>({date:m.date||'',name:m.name||'',result:m.result||''}));
+    if(t.seals) Object.assign(state.seals,t.seals);
+    syncFormFromState();
+    renderStatesForm(); renderComponentForm(); renderHistoryForm(); render();
+  }catch(err){ alert('Template invalide : '+err.message); }
+}
+function syncFormFromState(){
+  $('guild').value=state.metadata.guild; $('faction').value=state.metadata.faction; $('shipType').value=state.metadata.shipType;
+  $('mTitle').value=state.content.title; $('dStart').value=state.content.dateStart; $('dEnd').value=state.content.dateEnd; $('mPlace').value=state.content.place;
+  $('mPilots').value=state.content.pilots; $('mSummary').value=state.content.summary; $('mTactical').value=state.content.tactical;
+  $('mLosses').value=state.content.losses; $('mGains').value=state.content.gains;
+  $('sigName').value=state.content.sigName; $('sigRank').value=state.content.sigRank;
+  $('fontSel').value=state.styling.font; $('paperSel').value=state.styling.paperFormat; $('orientSel').value=state.styling.orientation;
+  $('c1').value=state.styling.primaryColor; $('c2').value=state.styling.secondaryColor;
+  $('rnPrefix').value=state.reportNumber.prefix; $('rnFormat').value=state.reportNumber.format;
+  $('stampOn').checked=state.seals.enabled; $('stampText').value=state.seals.stampText;
+  $('apprOn').checked=state.seals.approvalStamp; $('apprText').value=state.seals.approvalText;
+  $('classOn').checked=state.seals.classification; $('classText').value=state.seals.classificationText;
+  $('flagOn').checked=!!state.seals.flag;
+  $('flagC1').value=state.seals.flagColor1||'#1B3A5C'; $('flagC2').value=state.seals.flagColor2||'#C9A227';
+  document.querySelectorAll('[data-seg=pagemode] button').forEach(b=>b.classList.toggle('on',b.dataset.v===state.styling.pageMode));
+  $('clOn').checked=state.componentChecklist.enabled;
+  $('clCols').value=state.componentChecklist.columns||1; $('clColsVal').textContent=state.componentChecklist.columns||1;
+  $('sigSize').value=state.signatureImage.width; $('sigSizeVal').textContent=state.signatureImage.width;
+  if(state.signatureImage.imageBase64){ $('sigThumb').src=state.signatureImage.imageBase64; $('sigThumb').style.display='block'; $('sigDropTxt').textContent='Changer la signature'; }
+  else { $('sigThumb').style.display='none'; $('sigDropTxt').textContent='Cliquer pour charger une signature (PNG fond transparent conseillé)'; }
+  $('logoPos').value=state.logo.position; $('logoSize').value=state.logo.width; $('logoSizeVal').textContent=state.logo.width;
+  if(state.logo.imageBase64){ $('logoThumb').src=state.logo.imageBase64; $('logoThumb').style.display='block'; $('logoDropTxt').textContent='Changer le logo'; }
+  else { $('logoThumb').style.display='none'; $('logoDropTxt').textContent='Cliquer pour charger un logo (PNG/JPG/SVG)'; }
+  // segments
+  document.querySelectorAll('[data-seg=theme] button').forEach(b=>b.classList.toggle('on',b.dataset.v===state.styling.theme));
+  document.querySelectorAll('[data-seg=border] button').forEach(b=>b.classList.toggle('on',b.dataset.v===state.seals.borderStyle));
+  // toggles sections
+  document.querySelectorAll('[data-sec]').forEach(el=>{
+    const key = el.dataset.sec==='tactical'?'tacticalDetails':el.dataset.sec;
+    el.checked = !!state.sections[key];
+  });
+}
+
+$('tplExport').onclick = ()=>{
+  const t = buildTemplate();
+  const blob = new Blob([JSON.stringify(t,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (t.metadata.name||'template').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+};
+$('tplImport').onclick = ()=> $('tplFile').click();
+$('tplFile').onchange = e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{ try{ applyTemplate(JSON.parse(r.result)); }catch(err){ alert('JSON invalide.'); } };
+  r.readAsText(f); e.target.value='';
+};
+
+// localStorage
+const LS_KEY = 'sc-report-templates';
+function getLocalTemplates(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'[]'); }catch{ return []; } }
+$('tplSaveLocal').onclick = ()=>{
+  const t = buildTemplate();
+  const list = getLocalTemplates();
+  const i = list.findIndex(x=>x.metadata.name===t.metadata.name);
+  if(i>=0) list[i]=t; else list.push(t);
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(list)); alert('Template « '+t.metadata.name+' » enregistré.'); }
+  catch(err){ alert('Stockage local indisponible (logo trop lourd ?). Utilisez l\'export JSON.'); }
+};
+$('tplOpenLocal').onclick = ()=>{
+  const list = getLocalTemplates();
+  $('tplLocalList').innerHTML = list.length? list.map((t,i)=>`
+    <div class="tpl-item">
+      <div><b>${esc(t.metadata.name)}</b><small>${esc(t.metadata.guild||'—')} · ${esc(t.metadata.shipType||'—')} · ${esc(t.metadata.createdAt||'')}</small></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn small" onclick="loadLocalTpl(${i})">Charger</button>
+        <button class="btn small danger" onclick="delLocalTpl(${i})">✕</button>
+      </div>
+    </div>`).join('') : '<div class="hint">Aucun template enregistré dans ce navigateur.</div>';
+  $('tplDialog').showModal();
+};
+window.loadLocalTpl = i=>{ applyTemplate(getLocalTemplates()[i]); $('tplDialog').close(); };
+window.delLocalTpl = i=>{ const l=getLocalTemplates(); l.splice(i,1); localStorage.setItem(LS_KEY,JSON.stringify(l)); $('tplOpenLocal').click(); };
+
+/* =================================================================
+   EXPORT PDF
+================================================================= */
+$('pdfBtn').onclick = async ()=>{
+  const btn = $('pdfBtn'); btn.disabled=true; btn.textContent='Génération…';
+  try{
+    const src = $('paper');
+    const clone = src.cloneNode(true);
+    const holder = document.createElement('div');
+    holder.style.cssText='position:fixed;left:-10000px;top:0;';
+    holder.appendChild(clone); document.body.appendChild(holder);
+    const mode = state.styling.pageMode;
+    let jsPdfOpts, pagebreak = { mode:['css','legacy'] };
+    if(mode==='auto'){
+      const pxToMm = 25.4/96;
+      const Wmm = clone.offsetWidth*pxToMm;
+      const Hmm = Math.ceil(clone.offsetHeight*pxToMm)+1;
+      jsPdfOpts = { unit:'mm', format:[Wmm,Hmm], orientation: Hmm>=Wmm?'portrait':'landscape' };
+    } else {
+      const fmt = state.styling.paperFormat==='letter'?'letter':state.styling.paperFormat;
+      jsPdfOpts = { unit:'mm', format:fmt, orientation:state.styling.orientation };
+    }
+    await html2pdf().set({
+      margin:0,
+      filename:(state.reportNumber.value||'rapport-mission')+'.pdf',
+      image:{type:'jpeg',quality:.98},
+      html2canvas:{scale:IS_MOBILE?1.5:2,useCORS:true,backgroundColor:'#ffffff'},
+      pagebreak,
+      jsPDF:jsPdfOpts
+    }).from(clone).save();
+    holder.remove();
+  }catch(err){ alert('Échec de la génération PDF : '+err.message+'\nEssayez « Imprimer / PDF natif ».'); }
+  btn.disabled=false; btn.textContent='⬇ Exporter le PDF';
+};
+
+$('printBtn').onclick = ()=>{
+  let st = $('printPageStyle');
+  if(!st){ st = document.createElement('style'); st.id='printPageStyle'; document.head.appendChild(st); }
+  if(state.styling.pageMode==='auto'){
+    const pxToMm = 25.4/96, p = $('paper');
+    st.textContent = `@page{size:${p.offsetWidth*pxToMm}mm ${Math.ceil(p.offsetHeight*pxToMm)+1}mm;margin:0}`;
+  } else {
+    const fmt = state.styling.paperFormat==='letter'?'letter':state.styling.paperFormat.toUpperCase();
+    st.textContent = `@page{size:${fmt} ${state.styling.orientation};margin:0}`;
+  }
+  window.print();
+};
+
+/* =================================================================
+   INIT
+================================================================= */
+genReportNumber();
+renderStatesForm();
+renderComponentForm();
+renderHistoryForm();
+render();
+document.fonts && document.fonts.ready.then(fitPreview);
+</script>
+</body>
+</html>
